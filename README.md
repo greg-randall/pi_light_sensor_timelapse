@@ -2,7 +2,7 @@
 
 I'm building a timelapse camera setup to shoot months or years long timelapses. 
 
-The Raspberry Pi auto exposure doesn't work well for low light, and shooting test exposures in low light takes a long time. So, I've included a TSL2591 light sensor to make an initial reading of ambient light so the first test exposure is close to being right. 
+The Raspberry Pi auto exposure doesn't work well for low light and shooting test exposures in low light takes a long time. So, I've included a TSL2591 light sensor to make an initial reading of ambient light, so the first test exposure is close to being right. 
 
 ## Parts List
 |Item|Cost|
@@ -20,4 +20,4 @@ The Raspberry Pi auto exposure doesn't work well for low light, and shooting tes
 | |**Total**|
 | |**$166.19**|
 
-I think all the parts are self explanatory except for the power bank. This spesific power bank can do pass-through charging, so acts like a UPS for the Pi. In intial testing it seems to run the Pi and camera for around 1 day. 
+I think all the parts are self-explanatory except for the power bank. This specific power bank can do pass-through charging, so acts like a UPS for the Pi. In initial testing it seems to run the Pi and camera for around 1 day.
