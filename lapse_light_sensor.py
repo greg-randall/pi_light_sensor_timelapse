@@ -15,10 +15,13 @@ import pickle
 ###################################################################################
 #settings
 ###################################################################################
-max_shutter_speed = 200 * 1000000 #200 seconds for the hq cam
+max_shutter_speed = 239 * 1000000 #200 seconds for the hq cam, but camera works in millionths of a second
 image_x = 4056 #hq cam max res
 image_y = 3040
-isos = [100, 200, 400, 800] #dropped a few intermediate values
+iso = 100 # starting iso
+isos = [200, 400, 800] #dropped 100 since that's the default, also dropped a few intermediate values. 
+                       #camera seems to respond to higher isos, but the images don't get brighter
+                       #camera also seems to respond to isos lower than 100 but 100 is base iso
 
 #0-255 is the exposure range
 ideal_exposure=110
@@ -157,7 +160,7 @@ def calculate_lux(full, ir, integration_time, gain):
 ###########################################################
 
 
-debug = True
+debug = False
 start_time = int(time.time())
 
 print('Timelapse Started:')   
@@ -182,7 +185,7 @@ if path.exists("lux-exposure-dict"):
 
     if debug:
         print(f'shooting photo: {round(shutter_speed/1000000,3)} seconds')
-    shoot_photo(shutter_speed , 100, 1296, 976,False,'test.jpg')
+    shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
     exposure = check_exposure('test.jpg')
     
     if debug:
@@ -225,7 +228,7 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
     if shutter_speed>max_shutter_speed: #make sure we don't go past the longest shutter speed
         shutter_speed = max_shutter_speed
 
-    shoot_photo(shutter_speed , 100, 1296, 976,False,'test.jpg')
+    shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
     exposure = check_exposure('test.jpg')
 
     adjustment = ajustment_factor(exposure)
@@ -241,8 +244,13 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
         trials +=1
 
 if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
-    for iso in isos :
-        print(pet)
+    print('Maximum Shutter Speed Hit, Pushing ISO')
+    for iso in isos:
+        shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
+        exposure = check_exposure('test.jpg')
+        if exposure > (ideal_exposure-delta):
+            break
+    print(f'Pushed to {iso}')
 
 
 if debug:
@@ -265,7 +273,7 @@ if debug:
 #shoot_photo(shutter_speed, 100, image_x, image_y,true,filename)
 
 
-log_line = f"{filename_time},{exposure},{lux},{int(shutter_speed)},{int(time.time())-start_time},{trials}"
+log_line = f"{filename_time},{exposure},{lux},{int(shutter_speed)},{iso},{int(time.time())-start_time},{trials}"
 print(f"\n\nlog data:\n{log_line}")
 f=open("calibrate_cam_data.csv", "a+")
 f.write(f"{log_line}\n")
