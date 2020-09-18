@@ -43,6 +43,12 @@ def shoot_photo(ss,iso,w,h,shoot_raw,filename):
         exposure = '-ex off'
     
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+
+    f=open("log_commands.txt", "a+")
+    f.write(f"{command}\n")
+    f.close()
+
+
     os.system(command)
 
 
@@ -98,13 +104,6 @@ def get_lux(debug=False):
 
     lux_clean = []
 
-    if debug:
-        clean = PrettyTable()
-        clean.field_names = ["lux", "integration", "gain", "full", "ir"]
-        unclean = PrettyTable()
-        unclean.field_names = ["lux", "integration", "gain", "full", "ir"]
-
-
     for integration in integrations:
         tsl.set_timing(integration)
         for gain in gains:
@@ -112,11 +111,8 @@ def get_lux(debug=False):
             data = tsl.get_current()
             #data = tsl.get_current()
 
-            data['lux'] = calculate_lux(data['full'], data['ir'], integration, gain)
-
+            data['lux'] = calculate_lux(data['full'], data['ir'], integration, gain)           
             
-            if debug:
-                unclean.add_row([data['lux'],data['integration_time'],data['gain'],data['full'],data['ir']])
 
             #remove the garbage values:
             #no lux under zero
@@ -126,18 +122,10 @@ def get_lux(debug=False):
 
             if data['lux'] >= 0 and data['full'] < 65535 and data['ir'] < 65535 and  data['ir'] != 0 and data['full'] != 0 and data['full'] != 37888 and data['ir'] != 37888 and data['full'] != 37889 and data['ir'] != 37889:
                     lux_clean.append(data['lux'])
-                    if debug:
-                        clean.add_row([data['lux'],data['integration_time'],data['gain'],data['full'],data['ir']])
+                    
 
     median_lux = statistics.median(lux_clean)
-    mean_lux = statistics.mean(lux_clean)
     lux = round(median_lux, 5)
-
-    if debug:
-        print(f"dirty:\n{unclean}")
-        print(f"clean:\n{clean}")
-        print(f"median:\n{lux}")
-        print(f"mean:\n{round(mean_lux, 5)}")
     return lux
 
 
@@ -161,64 +149,43 @@ def calculate_lux(full, ir, integration_time, gain):
 
 
 debug = False
+
 start_time = int(time.time())
+
 
 print('Timelapse Started:')   
 
 
-
-
 lux = get_lux(debug)
-if debug:
-	print(f"get lux seconds elapsed: {int(time.time())-start_time}")
-
-if path.exists("lux-exposure-dict"):
+if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
         lux_exposure_dict = pickle.loads(handle.read())
     closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
     shutter_speed =lux_exposure_dict[closest]
     if shutter_speed >= max_shutter_speed:
         shutter_speed -= 10
-
-    if debug:
-	    print(f"open lookup table seconds elapsed: {int(time.time())-start_time}")
-
-    if debug:
-        print(f'shooting photo: {round(shutter_speed/1000000,3)} seconds')
     shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
-    exposure = check_exposure('test.jpg')
-    
-    if debug:
-        print(f"from look-up-table:\n  lux reading: {lux}\n  closest lux in dict: {closest}\n  shutter speed from in dict: {shutter_speed}\n")
-        print(f"shoot test photo from lookup seconds elapsed: {int(time.time())-start_time}")
-
-else:
+    exposure = check_exposure('test.jpg')    
+else: #if there isn't a dictonary, shoot a photo on auto for the starting point
     shoot_photo_auto(1296, 976,False,'test.jpg')
     shutter_speed = get_exif_shutter_speed('test.jpg') * 1000000 #convert shutter speed to microseconds
     exposure = check_exposure('test.jpg')
-    if debug:
-	    print(f"shoot auto photo seconds elapsed: {int(time.time())-start_time}")
+    
 
 #need to get iso from test photo too in the dark the camera auto ups iso, need to use iso value to change shutter speed 
-
-
 print(f"shutter speed,\tlux,\t\texposure,\tadjustment,\tfull shutter speed")
-
-
-
-
 print(f"{round(shutter_speed/1000000,4)},\t\t{lux},\t\t{exposure},\t\t0,\t\t{int(shutter_speed)}")
 
 
 adjustment = ajustment_factor(exposure)
 
-if debug:
-	print(f"before loop seconds elapsed: {int(time.time())-start_time}")
 
 #test for case where max shutter speed is hit but exposure is ***too*** bright
 trials = 0
-while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed: #or iso-- add code to push iso if max shutter speed hit
+#shoot photos until an appropriate exposure is found
+while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed:
     
+    #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
         shutter_speed = int(shutter_speed * adjustment) #longer shutter speed
     else:
@@ -233,63 +200,72 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
 
     adjustment = ajustment_factor(exposure)
 
-    print(f"{round(shutter_speed/1000000,4)},\t\t{lux},\t\t{exposure},\t\t{round(adjustment,3)},\t\t{int(shutter_speed)}")
+    print(f"{round(shutter_speed/1000000,4)},\t\t{lux},\t\t{exposure},\t\t{round(adjustment,3)},\t\t{int(shutter_speed)}") #tell the user about the current trail shot
 
-    if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop finishes,
-        shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is 
+    if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
+        shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
 
-    if trials >= 10:
+    if trials >= 10: #make sure our while loop doesn't do more than ten tirals
         break
     else:
         trials +=1
 
-if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
+if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta): #if the loop hit the max shutter speed, we'll try pushing the iso
     print('Maximum Shutter Speed Hit, Pushing ISO')
     for iso in isos:
         shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
         exposure = check_exposure('test.jpg')
-        if exposure > (ideal_exposure-delta):
+        if exposure > (ideal_exposure-delta): 
             break
     print(f'Pushed to {iso}')
 
 
-if debug:
-	print(f"finish loop seconds elapsed: {int(time.time())-start_time}")
 
+
+
+
+
+
+
+#shoot full image? or should each test image be full image?
+#need to test time taken to shoot full photo with raw vs test photo.
+#probably faster to shoot full photo above in loop
 lux = get_lux(debug)
-if debug:
-	print(f"get fresh lux for table seconds elapsed: {int(time.time())-start_time}")
-
 exif_shutter = get_exif_shutter_speed('test.jpg')
 filename_time = int(time.time())
+#shoot_photo(shutter_speed, 100, image_x, image_y,true,filename)
 filename = f"{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
-if debug:
-	print(f"rename files seconds elapsed: {int(time.time())-start_time}")
 
 
-#shoot full image
-#shoot_photo(shutter_speed, 100, image_x, image_y,true,filename)
 
 
+
+
+
+#write logging data
+#file creation time in unix timestamp, exposure 0-255, lux, shutter speed in millionths of a second, iso, total time taken to shoot the photo, number of test exposures needed to get to a good exposure
 log_line = f"{filename_time},{exposure},{lux},{int(shutter_speed)},{iso},{int(time.time())-start_time},{trials}"
 print(f"\n\nlog data:\n{log_line}")
 f=open("calibrate_cam_data.csv", "a+")
 f.write(f"{log_line}\n")
 f.close()
 
-if debug:
-	print(f"data log seconds elapsed: {int(time.time())-start_time}")
 
-if path.exists("lux-exposure-dict"):
-    lux_exposure_dict.update({lux : shutter_speed})
-else:
-    lux_exposure_dict = {lux : shutter_speed}
 
-with open('lux-exposure-dict', 'wb') as handle:
-    pickle.dump(lux_exposure_dict, handle)
 
-if debug:
-	print(f"final seconds elapsed: {int(time.time())-start_time}")
+
+if exposure < (ideal_exposure-delta) and exposure > (ideal_exposure+delta):#make sure we got a good exposure before we save it to the table
+    if path.exists("lux-exposure-dict"): #if the dictonary already exists we'll add a value to it
+        lux_exposure_dict.update({lux : shutter_speed})
+    else:
+        lux_exposure_dict = {lux : shutter_speed} #if the dictonary doesn't exist we'll need to create a new dictonary
+
+    with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
+        pickle.dump(lux_exposure_dict, handle)
+
+
+
+
 
