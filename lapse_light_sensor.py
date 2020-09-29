@@ -36,9 +36,11 @@ def shoot_photo(ss,iso,w,h,shoot_raw,filename):
     else:
         exposure = '-ex off'
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+    #exposure debugging
     f=open("log_commands.txt", "a+")
     f.write(f"{command}\n")
     f.close()
+    #
     os.system(command)
 def shoot_photo_auto(w,h,shoot_raw,filename):
     if shoot_raw:
@@ -107,6 +109,7 @@ debug = False
 start_time = int(time.time())
 print('Timelapse Started:')   
 lux = get_lux(debug)
+print(f"lux reading: {lux}")
 if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
         lux_exposure_dict = pickle.loads(handle.read())
@@ -114,11 +117,13 @@ if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter sp
     shutter_speed =lux_exposure_dict[closest]
     if shutter_speed >= max_shutter_speed:
         shutter_speed -= 10
+    print(f"lookup table shutter speed: {shutter_speed/1000000}\n")
     shoot_photo(shutter_speed , iso, 1296, 976,False,'test.jpg')
     exposure = check_exposure('test.jpg')    
 else: #if there isn't a dictonary, shoot a photo on auto for the starting point
     shoot_photo_auto(1296, 976,False,'test.jpg')
     shutter_speed = get_exif_shutter_speed('test.jpg') * 1000000 #convert shutter speed to microseconds
+    print(f"auto exposure shutter speed: {shutter_speed/1000000}\n")
     exposure = check_exposure('test.jpg')
 #need to get iso from test photo too in the dark the camera auto ups iso, need to use iso value to change shutter speed 
 print(f"shutter speed,\tlux,\t\texposure,\tadjustment,\tfull shutter speed")
@@ -169,10 +174,19 @@ print(f"\n\nlog data:\n{log_line}")
 f=open("calibrate_cam_data.csv", "a+")
 f.write(f"{log_line}\n")
 f.close()
-if exposure < (ideal_exposure-delta) and exposure > (ideal_exposure+delta):#make sure we got a good exposure before we save it to the table
+#                105                                      115      
+#   108      >   110-5                      108          110+5  
+if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):#make sure we got a good exposure before we save it to the table
+    print('we got a good exposure for adding to the dictonary')
     if path.exists("lux-exposure-dict"): #if the dictonary already exists we'll add a value to it
         lux_exposure_dict.update({lux : shutter_speed})
     else:
         lux_exposure_dict = {lux : shutter_speed} #if the dictonary doesn't exist we'll need to create a new dictonary
     with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
         pickle.dump(lux_exposure_dict, handle)
+        print(f'wrote item to dictonary -- {lux} : {shutter_speed}')
+
+#remove once debugging of exposures is done        
+f=open("log_commands.txt", "a+")
+f.write(f"{filename_time} - finished \n")
+f.close()
