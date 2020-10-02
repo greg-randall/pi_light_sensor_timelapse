@@ -10,6 +10,7 @@ import json
 import collections 
 import bisect 
 import pickle
+
 ###################################################################################
 #settings
 ###################################################################################
@@ -39,6 +40,7 @@ def shoot_photo(ss,iso,w,h,shoot_raw,filename):
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
     os.system(command)
 
+    #debug:
     f=open("log_commands.txt", "a+")
     f.write(f"{command}\n")
     f.close()
@@ -118,23 +120,38 @@ def calculate_lux(full, ir, integration_time, gain):
         lux = (full - ir) * (1 - (ir / full)) / (( integration_numbers[integration_time] * gain_numbers[gain] ) / lux_co)
         return lux
 
-###########################################################
+def pretty_shutter_speed(ss):
+    if ss>1000000:
+        return str(int(ss/1000000))
+    else:
+        shutter_speed_fractions = {0.000125 : "8000", 0.00015625 : "6400", 0.0002 : "5000", 0.00025 : "4000", 0.0003125 : "3200", 0.0004 : "2500", 0.0005 : "2000", 0.000625 : "1600", 0.0008 : "1250", 0.001 : "1000", 0.00125 : "800", 0.0015625 : "640", 0.002 : "500", 0.0025 : "400", 0.003125 : "320", 0.004 : "250", 0.005 : "200", 0.00625 : "160", 0.008 : "125", 0.01 : "100", 0.0125 : "80", 0.016666667 : "60", 0.02 : "50", 0.025 : "40", 0.033333333 : "30", 0.04 : "25", 0.05 : "20", 0.066666667 : "15", 0.076923077 : "13", 0.1 : "10", 0.125 : "8", 0.166666667 : "6", 0.2 : "5", 0.25 : "4", 0.333333333 : "3", 0.4 : "2.5", 0.5 : "2", 1.666666667 : "0.6", 3.333333333 : "0.3"}
+        closest = min(shutter_speed_fractions, key=lambda x:abs(x-(ss/1000000)))
+        shutter_speed_fraction = shutter_speed_fractions[closest]
+        return f"1/{shutter_speed_fraction}"
 
-#debugging:
-f=open("log_commands.txt", "a+")
-f.write(f"{int(time.time())} ------------------------------------------------------------\n")
-f.close()
+
+
+###########################################################
+debug = False
+
+if debug:
+    f=open("log_commands.txt", "a+")
+    f.write(f"{int(time.time())} ------------------------------------------------------------\n")
+    f.close()
 
 
 start_time = int(time.time())
-print(f"Shutter Speed,\tLux,\t\tExposure (0-255),\tAdjustment,\tFull Shutter Speed")
+print(f"Shutter Speed,\tLux,\t\tExposure (0-255),\tAdjustment")
 
 
 lux = get_lux()
-
+if debug:
+	print (f"\ndebug get lux Seconds Elapsed: {int(time.time())-start_time}")
 if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
         lux_exposure_dict = pickle.loads(handle.read())
+    if debug:
+	    print (f"\ndebug dict read Seconds Elapsed: {int(time.time())-start_time}")
     #find the closest value in the lux dictonary
     closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
     shutter_speed = lux_exposure_dict[closest]
@@ -145,19 +162,24 @@ if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter sp
     #shoot test photo with the shutter speed from the dictonary
     shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
     exposure = check_exposure('test.jpg')    
-
+    if debug:
+	    print (f"\ndebug dict test shot Seconds Elapsed: {int(time.time())-start_time}")
 else: #if there isn't a dictonary, shoot a photo on auto for the starting point
     shoot_photo_auto(image_x, image_y,True,'test.jpg')
     shutter_speed = get_exif_shutter_speed('test.jpg') * 1000000 #convert shutter speed to microseconds
     exposure = check_exposure('test.jpg')
+    if debug:
+	    print (f"\ndebug auto exposure Seconds Elapsed: {int(time.time())-start_time}")
 #need to get iso from test photo too in the dark the camera auto ups iso, need to use iso value to change shutter speed 
-print(f"{round(shutter_speed/1000000,4)},\t\t{lux},\t\t{exposure},\t\t0,\t\t{int(shutter_speed)}")
+print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t0")
 adjustment = ajustment_factor(exposure)
 #test for case where max shutter speed is hit but exposure is ***too*** bright
 
 
 #shoot photos until an appropriate exposure is found
 trials = 0 #count the number of trial exposures to limit how long this process takes
+if debug:
+	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
 while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed:
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
@@ -169,13 +191,15 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
     shoot_photo(shutter_speed , iso, image_x, image_y,True,'test.jpg')
     exposure = check_exposure('test.jpg')
     adjustment = ajustment_factor(exposure)
-    print(f"{round(shutter_speed/1000000,4)},\t\t{lux},\t\t{exposure},\t\t{round(adjustment,3)},\t\t{int(shutter_speed)}") #tell the user about the current trail shot
+    print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t{round(adjustment,3)}") #tell the user about the current trail shot
     if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
         shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
     if trials >= 10: #make sure our while loop doesn't do more than ten tirals
         break
     else:
         trials +=1
+    if debug:
+	    print (f"\ndebug inside loop Seconds Elapsed: {int(time.time())-start_time}")
 
 #if we hit the max shutter speed, and it's still too dark we'll try pushing the iso:
 if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta): 
@@ -185,21 +209,28 @@ if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
         exposure = check_exposure('test.jpg')
         if exposure > (ideal_exposure-delta): 
             break
+    if debug:
+	    print (f"\ndebug iso loop Seconds Elapsed: {int(time.time())-start_time}")
     print(f'Pushed to {iso}')
 
 lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
-
+if debug:
+	print (f"\ndebug get lux again Seconds Elapsed: {int(time.time())-start_time}")
 #rename test shot as the final shot 
 filename_time = int(time.time())
 filename = f"{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
-
+if debug:
+	print (f"\ndebug rename files Seconds Elapsed: {int(time.time())-start_time}")
 
 #extract raw file from jpg
 os.system(f"python3 PyDNG/examples/utility.py {filename}")
+if debug:
+	print (f"\ndebug extract raws Seconds Elapsed: {int(time.time())-start_time}")
 #remove raw from jpg and compress the jpeg a bit
 os.system(f"convert {filename} -sampling-factor 4:2:0 -strip -quality 85 {filename}")
-
+if debug:
+	print (f"\ndebug compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
 print (f"\nSeconds Elapsed: {int(time.time())-start_time}")
 
@@ -212,11 +243,11 @@ log_line = f"{filename_time},{exposure},{lux},{int(shutter_speed)},{iso},{int(ti
 f=open("calibrate_cam_data.csv", "a+")
 f.write(f"{log_line}\n")
 f.close()
-
+if debug:
+	print (f"\ndebug write out log Seconds Elapsed: {int(time.time())-start_time}")
 
 #if the exposure from the library took too many tries delete it:
 if trials >=3 and path.exists("lux-exposure-dict"):
-    print(f'deleted from dict too many trials - {trials} -- {lux_exposure_dict[closest]}')
     del lux_exposure_dict[closest]
     
 
@@ -230,4 +261,5 @@ if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
         pickle.dump(lux_exposure_dict, handle)
 
 
-
+if debug:
+	print (f"\ndebug record dict Seconds Elapsed: {int(time.time())-start_time}")
