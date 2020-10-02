@@ -10,6 +10,9 @@ import json
 import collections 
 import bisect 
 import pickle
+from scipy.optimize import curve_fit
+
+
 
 ###################################################################################
 #settings
@@ -132,7 +135,7 @@ def pretty_shutter_speed(ss):
 
 
 ###########################################################
-debug = False
+debug = True
 
 if debug:
     f=open("log_commands.txt", "a+")
@@ -232,7 +235,7 @@ os.system(f"convert {filename} -sampling-factor 4:2:0 -strip -quality 85 {filena
 if debug:
 	print (f"\ndebug compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
-print (f"\nSeconds Elapsed: {int(time.time())-start_time}")
+
 
 
 
@@ -257,9 +260,54 @@ if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
         lux_exposure_dict.update({lux : shutter_speed})
     else:
         lux_exposure_dict = {lux : shutter_speed} #if the dictonary doesn't exist we'll need to create a new dictonary
-    with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
-        pickle.dump(lux_exposure_dict, handle)
+
 
 
 if debug:
-	print (f"\ndebug record dict Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
+
+
+#prune items from dictonary that fall outside reasonable bounds
+lux_exposure_dict_count = len(lux_exposure_dict.keys())
+log_lux_exposure = {}
+#convert all items in dict to log
+for key in lux_exposure_dict.keys():
+    lux = np.log10(key)
+    exposure = np.log10(lux_exposure_dict[key])
+    log_lux_exposure.update({lux : exposure})
+data = list(log_lux_exposure.items())
+an_array = np.array(data)
+
+#do a curve fitting on the data
+m, b = np.polyfit(an_array[ : , 0], an_array[ : , 1], 1)
+
+
+if debug:
+    f=open("pruned-lux-ss.txt", "a+")
+    f.write(f"{filename_time}---------------------\n")
+    f.close()
+
+for lux in lux_exposure_dict.copy().keys():
+    log_lux = np.log10(lux)
+    predicted = m*log_lux+b
+    #see how closely the shutter speed that was actually used compares to the predicted shutter speed
+    #remove nonsense items
+    if abs(np.log10(lux_exposure_dict[lux]) - predicted) >=1:
+        if debug:
+            f=open("pruned-lux-ss.txt", "a+")
+            f.write(f"{lux}, {lux_exposure_dict[lux]}\n")
+            f.close()
+        
+        del lux_exposure_dict[lux]
+
+with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
+    pickle.dump(lux_exposure_dict, handle)
+
+
+print( f"{lux_exposure_dict_count-len(lux_exposure_dict.keys())} Dictonary Items Pruned")
+
+if debug:
+	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
+
+
+print (f"\nSeconds Elapsed: {int(time.time())-start_time}")
