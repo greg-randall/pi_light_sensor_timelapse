@@ -28,4 +28,5 @@ The Raspberry Pi auto exposure doesn't work in low light, so I've included a lig
 | |**$226.66**| |
 
 \*This power bank can do pass-through charging, so acts like a UPS for the Pi. In initial testing it seems to run the Pi and camera for around 1 day.
+
 \*\*Good filters are really expensive. This filter seems to shed water and self clean much better than others I've tried. 
