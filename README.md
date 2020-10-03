@@ -6,7 +6,7 @@ The pysical hardware needs to protect the camera, Raspberry Pi, battery, etc fro
 
 The software needs to calculate exposures for the photos, shoot the photos, and transfer them somewhere. 
 
-The Raspberry Pi auto exposure doesn't work in low light, so I've included a light sensor to speed up finding the exposure
+The Raspberry Pi auto exposure doesn't work in low light, so I've included a light sensor to speed up finding the correct exposure.
 
 ## Parts List
 |Item|Cost|Supplier
