@@ -18,17 +18,17 @@ max_shutter_speed = 239 * 1000000 #200 seconds for the hq cam, but camera works 
 image_x = 4056 #hq cam max res
 image_y = 3040
 iso = 100 # starting iso
-isos = [200, 400, 800] #dropped 100 since that's the default, also dropped a few intermediate values. 
+isos = [200, 400, 800] #dropped 100 since that's the default, also dropped a few intermediate values.
                        #camera seems to respond to higher isos, but the images don't get brighter
                        #camera also seems to respond to isos lower than 100 but 100 is base iso
 #0-255 is the exposure range
 ideal_exposure=110
-#delta is how far from the ideal you're welling to go, ~5 is pretty reasonable, smaller 
+#delta is how far from the ideal you're welling to go, ~5 is pretty reasonable, smaller
 #probably requires modifications to the code
 delta=5
 #####################################################################################
 
-def shoot_photo(ss,iso,w,h,shoot_raw,filename): 
+def shoot_photo(ss,iso,w,h,shoot_raw,filename):
     if shoot_raw:
         raw = '--raw '
     else:
@@ -40,10 +40,6 @@ def shoot_photo(ss,iso,w,h,shoot_raw,filename):
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
     os.system(command)
 
-    #debug:
-    f=open("log_commands.txt", "a+")
-    f.write(f"{command}\n")
-    f.close()
 
 def shoot_photo_auto(w,h,shoot_raw,filename):
     #shoot a photo on auto exposure
@@ -54,7 +50,7 @@ def shoot_photo_auto(w,h,shoot_raw,filename):
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -n -w {w} -h {h} -o {filename}"
     os.system(command)
 
-def check_exposure(filename): 
+def check_exposure(filename):
     #get an average brightness from an image 0-255
     command = f"convert {filename} -sample 300x300 -resize 1x1 -set colorspace Gray -format %c histogram:info:-" #this order of sample, resize and colorspace seems to be the fastest
     exposure = os.popen(command).read()
@@ -62,14 +58,14 @@ def check_exposure(filename):
     exposure = re.search(r'\d{1,3}',exposure.group())
     return int(exposure.group())
 
-def get_exif_shutter_speed(filename): 
+def get_exif_shutter_speed(filename):
     #get the shutter speed from the exif data on an image
     f = open(filename,'rb')
     data = exifread.process_file(f)
     f.close()
     ss_raw = str(data['EXIF ExposureTime'])
     ss_split = ss_raw.split('/')
-    return (float(ss_split[0])/float(ss_split[1]))
+    return (float(ss_split[0])/float(ss_split[1]))*1000000 #return shutter speed in millionths of a second
 
 def ajustment_factor(exposure):
     #ran a curve fitting on some values I decided were reasonable for adjustment
@@ -79,7 +75,7 @@ def ajustment_factor(exposure):
     else:
         adjustment = 4.722986 - 0.05614406*exposure + 0.0002296754*exposure**2
     return adjustment
-    
+
 def get_lux():
     #the light sensor displays some odd behaivor over it's variaous gain and integration times.
     #this tests all combinations of gain/integration and throws out garbage data, and then returns
@@ -94,7 +90,7 @@ def get_lux():
             tsl.set_gain(gain)
             data = tsl.get_current()
             #data = tsl.get_current()
-            data['lux'] = calculate_lux(data['full'], data['ir'], integration, gain)           
+            data['lux'] = calculate_lux(data['full'], data['ir'], integration, gain)
             #remove the garbage values:
             #no lux under zero
             #no raw values over 65535, sensor saturates at 65535
@@ -132,12 +128,9 @@ def pretty_shutter_speed(ss):
 
 
 ###########################################################
-debug = False
 
-if debug:
-    f=open("log_commands.txt", "a+")
-    f.write(f"{int(time.time())} ------------------------------------------------------------\n")
-    f.close()
+
+debug = False
 
 
 start_time = int(time.time())
@@ -145,78 +138,93 @@ print(f"Shutter Speed,\tLux,\t\tExposure (0-255),\tAdjustment")
 
 
 lux = get_lux()
+
 if debug:
 	print (f"\ndebug get lux Seconds Elapsed: {int(time.time())-start_time}")
+
 if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
         lux_exposure_dict = pickle.loads(handle.read())
+
     if debug:
 	    print (f"\ndebug dict read Seconds Elapsed: {int(time.time())-start_time}")
+
     #find the closest value in the lux dictonary
     closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
     shutter_speed = lux_exposure_dict[closest]
-    #if exposure from the dictonary is at the maximum the exposure trails loop won't run, so we want to reduce the exposure a bit
+    #if exposure from the dictonary is at the maximum the exposure below exposure loop won't run, so we want to reduce the exposure a bit
     if shutter_speed >= max_shutter_speed:
         shutter_speed -= 10
 
     #shoot test photo with the shutter speed from the dictonary
     shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
-    exposure = check_exposure('test.jpg')    
+    exposure = check_exposure('test.jpg')
+
     if debug:
 	    print (f"\ndebug dict test shot Seconds Elapsed: {int(time.time())-start_time}")
+
 else: #if there isn't a dictonary, shoot a photo on auto for the starting point
     shoot_photo_auto(image_x, image_y,True,'test.jpg')
-    shutter_speed = get_exif_shutter_speed('test.jpg') * 1000000 #convert shutter speed to microseconds
+
+    shutter_speed = get_exif_shutter_speed('test.jpg')
     exposure = check_exposure('test.jpg')
+
     if debug:
 	    print (f"\ndebug auto exposure Seconds Elapsed: {int(time.time())-start_time}")
-#need to get iso from test photo too in the dark the camera auto ups iso, need to use iso value to change shutter speed 
-print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t0")
-adjustment = ajustment_factor(exposure)
-#test for case where max shutter speed is hit but exposure is ***too*** bright
 
+print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t0")
+
+adjustment = ajustment_factor(exposure)
 
 #shoot photos until an appropriate exposure is found
 trials = 0 #count the number of trial exposures to limit how long this process takes
+
 if debug:
 	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
-while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed:
+
+while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed and trials <= 10:
+
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
         shutter_speed = int(shutter_speed * adjustment) #longer shutter speed
     else:
         shutter_speed = int(shutter_speed / adjustment) #longer shorter speed
+
     if shutter_speed>max_shutter_speed: #make sure we don't go past the longest shutter speed
         shutter_speed = max_shutter_speed
+
     shoot_photo(shutter_speed , iso, image_x, image_y,True,'test.jpg')
     exposure = check_exposure('test.jpg')
+
     adjustment = ajustment_factor(exposure)
-    print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t{round(adjustment,3)}") #tell the user about the current trail shot
+    print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t{round(adjustment,3)}") #tell the user about the current trial shot
+
     if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
         shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
-    if trials >= 10: #make sure our while loop doesn't do more than ten tirals
-        break
-    else:
-        trials +=1
+
+    trials +=1
+
     if debug:
 	    print (f"\ndebug inside loop Seconds Elapsed: {int(time.time())-start_time}")
 
 #if we hit the max shutter speed, and it's still too dark we'll try pushing the iso:
-if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta): 
+if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
     print('Maximum Shutter Speed Hit, Pushing ISO')
     for iso in isos:
         shoot_photo(shutter_speed , iso, image_x, image_y,True,'test.jpg')
         exposure = check_exposure('test.jpg')
-        if exposure > (ideal_exposure-delta): 
+        if exposure > (ideal_exposure-delta):
             break
+
     if debug:
 	    print (f"\ndebug iso loop Seconds Elapsed: {int(time.time())-start_time}")
+
     print(f'Pushed to {iso}')
 
 lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
 if debug:
 	print (f"\ndebug get lux again Seconds Elapsed: {int(time.time())-start_time}")
-#rename test shot as the final shot 
+#rename test shot as the final shot
 filename_time = int(time.time())
 filename = f"{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
@@ -249,7 +257,7 @@ if debug:
 #if the exposure from the library took too many tries delete it:
 if trials >=3 and path.exists("lux-exposure-dict"):
     del lux_exposure_dict[closest]
-    
+
 
 #make sure we got a good exposure before we save it to the table
 if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
@@ -294,7 +302,6 @@ for lux in lux_exposure_dict.copy().keys():
             f=open("pruned-lux-ss.txt", "a+")
             f.write(f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n")
             f.close()
-        
         del lux_exposure_dict[lux]
 
 with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
