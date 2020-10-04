@@ -8,6 +8,7 @@ import statistics
 import numpy as np
 import pickle
 from scipy.optimize import curve_fit
+from humanfriendly import format_timespan
 
 
 
@@ -28,7 +29,7 @@ ideal_exposure=110
 delta=5
 #####################################################################################
 
-def shoot_photo(ss,iso,w,h,shoot_raw,filename):
+def shoot_photo(ss, iso, w, h, shoot_raw, filename):
     if shoot_raw:
         raw = '--raw '
     else:
@@ -41,7 +42,7 @@ def shoot_photo(ss,iso,w,h,shoot_raw,filename):
     os.system(command)
 
 
-def shoot_photo_auto(w,h,shoot_raw,filename):
+def shoot_photo_auto(w, h, shoot_raw, filename):
     #shoot a photo on auto exposure
     if shoot_raw:
         raw = '--raw '
@@ -54,13 +55,13 @@ def check_exposure(filename):
     #get an average brightness from an image 0-255
     command = f"convert {filename} -sample 300x300 -resize 1x1 -set colorspace Gray -format %c histogram:info:-" #this order of sample, resize and colorspace seems to be the fastest
     exposure = os.popen(command).read()
-    exposure = re.search(r'\(\d{1,3}\)',exposure)
-    exposure = re.search(r'\d{1,3}',exposure.group())
+    exposure = re.search(r'\(\d{1,3}\)', exposure)
+    exposure = re.search(r'\d{1,3}', exposure.group())
     return int(exposure.group())
 
 def get_exif_shutter_speed(filename):
     #get the shutter speed from the exif data on an image
-    f = open(filename,'rb')
+    f = open(filename, 'rb')
     data = exifread.process_file(f)
     f.close()
     ss_raw = str(data['EXIF ExposureTime'])
@@ -124,8 +125,7 @@ def pretty_shutter_speed(ss):
         closest = min(shutter_speed_fractions, key=lambda x:abs(x-(ss/1000000)))
         shutter_speed_fraction = shutter_speed_fractions[closest]
         return f"1/{shutter_speed_fraction}"
-
-
+      
 
 ###########################################################
 
@@ -134,7 +134,7 @@ debug = False
 
 
 start_time = int(time.time())
-print(f"Shutter Speed,\tLux,\t\tExposure (0-255),\tAdjustment")
+print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
 
 
 lux = get_lux()
@@ -164,7 +164,8 @@ if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter sp
 	    print (f"\ndebug dict test shot Seconds Elapsed: {int(time.time())-start_time}")
 
 else: #if there isn't a dictonary, shoot a photo on auto for the starting point
-    shoot_photo_auto(image_x, image_y,True,'test.jpg')
+    print("No exposure dictonary found, shooting a photo full auto for a starting point.")
+    shoot_photo_auto(image_x, image_y, True, 'test.jpg')
 
     shutter_speed = get_exif_shutter_speed('test.jpg')
     exposure = check_exposure('test.jpg')
@@ -172,7 +173,7 @@ else: #if there isn't a dictonary, shoot a photo on auto for the starting point
     if debug:
 	    print (f"\ndebug auto exposure Seconds Elapsed: {int(time.time())-start_time}")
 
-print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t0")
+print(f"{pretty_shutter_speed(shutter_speed)}, \t\t{lux}, \t{exposure}, \t\t\t0")
 
 adjustment = ajustment_factor(exposure)
 
@@ -193,11 +194,11 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
     if shutter_speed>max_shutter_speed: #make sure we don't go past the longest shutter speed
         shutter_speed = max_shutter_speed
 
-    shoot_photo(shutter_speed , iso, image_x, image_y,True,'test.jpg')
+    shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
     exposure = check_exposure('test.jpg')
 
     adjustment = ajustment_factor(exposure)
-    print(f"{pretty_shutter_speed(shutter_speed)},\t\t{lux},\t{exposure},\t\t\t{round(adjustment,3)}") #tell the user about the current trial shot
+    print(f"{pretty_shutter_speed(shutter_speed)}, \t\t{lux}, \t{exposure}, \t\t\t{round(adjustment, 3)}") #tell the user about the current trial shot
 
     if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
         shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
@@ -211,7 +212,7 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
 if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
     print('Maximum Shutter Speed Hit, Pushing ISO')
     for iso in isos:
-        shoot_photo(shutter_speed , iso, image_x, image_y,True,'test.jpg')
+        shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
         exposure = check_exposure('test.jpg')
         if exposure > (ideal_exposure-delta):
             break
@@ -222,35 +223,38 @@ if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
     print(f'Pushed to {iso}')
 
 lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
+
 if debug:
 	print (f"\ndebug get lux again Seconds Elapsed: {int(time.time())-start_time}")
+
 #rename test shot as the final shot
 filename_time = int(time.time())
 filename = f"{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
+
 if debug:
 	print (f"\ndebug rename files Seconds Elapsed: {int(time.time())-start_time}")
 
 #extract raw file from jpg
 os.system(f"python3 PyDNG/examples/utility.py {filename}")
+
 if debug:
 	print (f"\ndebug extract raws Seconds Elapsed: {int(time.time())-start_time}")
+
 #remove raw from jpg and compress the jpeg a bit
 os.system(f"convert {filename} -sampling-factor 4:2:0 -strip -quality 85 {filename}")
+
 if debug:
 	print (f"\ndebug compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
 
-
-
-
-
 #write logging data
 #file creation time in unix timestamp, exposure 0-255, lux, shutter speed in millionths of a second, iso, total time taken to shoot the photo, number of test exposures needed to get to a good exposure
-log_line = f"{filename_time},{exposure},{lux},{int(shutter_speed)},{iso},{int(time.time())-start_time},{trials}"
+log_line = f"{filename_time}, {exposure}, {lux}, {int(shutter_speed)}, {iso}, {int(time.time())-start_time}, {trials}"
 f=open("calibrate_cam_data.csv", "a+")
 f.write(f"{log_line}\n")
 f.close()
+
 if debug:
 	print (f"\ndebug write out log Seconds Elapsed: {int(time.time())-start_time}")
 
@@ -271,47 +275,47 @@ if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
 if debug:
 	print (f"\ndebug add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
 
+if len(lux_exposure_dict.keys()) > 1: #run the dictonary pruning if there is more than one item in the dictonary
+    #prune items from dictonary that fall outside reasonable bounds
+    lux_exposure_dict_count = len(lux_exposure_dict.keys())
+    log_lux_exposure = {}
+    #convert all items in dict to log
+    for key in lux_exposure_dict.keys():
+        lux = np.log10(key)
+        exposure = np.log10(lux_exposure_dict[key])
+        log_lux_exposure.update({lux : exposure})
+    log_lux_exposure = list(log_lux_exposure.items())
+    log_lux_exposure_array = np.array(log_lux_exposure)
 
-#prune items from dictonary that fall outside reasonable bounds
-lux_exposure_dict_count = len(lux_exposure_dict.keys())
-log_lux_exposure = {}
-#convert all items in dict to log
-for key in lux_exposure_dict.keys():
-    lux = np.log10(key)
-    exposure = np.log10(lux_exposure_dict[key])
-    log_lux_exposure.update({lux : exposure})
-data = list(log_lux_exposure.items())
-an_array = np.array(data)
-
-#do a curve fitting on the data
-m, b = np.polyfit(an_array[ : , 0], an_array[ : , 1], 1)
+    #do a curve fitting on the data
+    m, b = np.polyfit(log_lux_exposure_array[ :, 0], log_lux_exposure_array[ :, 1], 1)
 
 
-if True:#if debug:
-    f=open("pruned-lux-ss.txt", "a+")
-    f.write(f"{filename_time}---------------------\n")
-    f.close()
+    if True:#if debug:
+        f=open("pruned-lux-ss.txt", "a+")
+        f.write(f"{filename_time}---------------------\n")
+        f.close()
 
-for lux in lux_exposure_dict.copy().keys():
-    log_lux = np.log10(lux)
-    predicted = m*log_lux+b
-    #see how closely the shutter speed that was actually used compares to the predicted shutter speed
-    #remove nonsense items
-    if abs(np.log10(lux_exposure_dict[lux]) - predicted) >=1:
-        if debug:
-            f=open("pruned-lux-ss.txt", "a+")
-            f.write(f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n")
-            f.close()
-        del lux_exposure_dict[lux]
+    #evaluate each item in the dictonary
+    for lux in lux_exposure_dict.copy().keys():
+        log_lux = np.log10(lux)
+        predicted = m*log_lux+b
+        #see how closely the shutter speed that was actually used compares to the predicted shutter speed
+        #remove nonsense items
+        if abs(np.log10(lux_exposure_dict[lux]) - predicted) >=1:
+            if True:#debug:
+                f=open("pruned-lux-ss.txt", "a+")
+                f.write(f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n")
+                f.close()
+            del lux_exposure_dict[lux]
+    print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}")
 
 with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
     pickle.dump(lux_exposure_dict, handle)
 
 
-print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}")
-
 if debug:
 	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
 
 
-print (f"\nSeconds Elapsed: {int(time.time())-start_time}")
+print (f"\nEverything took {format_timespan(int(time.time()-start_time))}.")
