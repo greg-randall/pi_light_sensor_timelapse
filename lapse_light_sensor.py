@@ -6,9 +6,6 @@ import exifread
 from python_tsl2591 import tsl2591
 import statistics
 import numpy as np
-import json
-import collections 
-import bisect 
 import pickle
 from scipy.optimize import curve_fit
 
@@ -135,7 +132,7 @@ def pretty_shutter_speed(ss):
 
 
 ###########################################################
-debug = True
+debug = False
 
 if debug:
     f=open("log_commands.txt", "a+")
@@ -282,7 +279,7 @@ an_array = np.array(data)
 m, b = np.polyfit(an_array[ : , 0], an_array[ : , 1], 1)
 
 
-if debug:
+if True:#if debug:
     f=open("pruned-lux-ss.txt", "a+")
     f.write(f"{filename_time}---------------------\n")
     f.close()
@@ -295,7 +292,7 @@ for lux in lux_exposure_dict.copy().keys():
     if abs(np.log10(lux_exposure_dict[lux]) - predicted) >=1:
         if debug:
             f=open("pruned-lux-ss.txt", "a+")
-            f.write(f"{lux}, {lux_exposure_dict[lux]}\n")
+            f.write(f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n")
             f.close()
         
         del lux_exposure_dict[lux]
@@ -304,7 +301,7 @@ with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a fi
     pickle.dump(lux_exposure_dict, handle)
 
 
-print( f"{lux_exposure_dict_count-len(lux_exposure_dict.keys())} Dictonary Items Pruned")
+print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}")
 
 if debug:
 	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
