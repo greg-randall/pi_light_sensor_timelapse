@@ -10,7 +10,7 @@ import pickle
 from scipy.optimize import curve_fit
 from humanfriendly import format_timespan
 
-
+from datetime import datetime, timezone
 
 ###################################################################################
 #settings
@@ -183,7 +183,7 @@ trials = 0 #count the number of trial exposures to limit how long this process t
 if debug:
 	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
 
-while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed and trials <= 10:
+while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed and trials <= 7:
 
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
@@ -229,6 +229,11 @@ if debug:
 
 #rename test shot as the final shot
 filename_time = int(time.time())
+
+utc_time = datetime.fromtimestamp(filename_time, timezone.utc)
+local_time = utc_time.astimezone()
+local_time = str(local_time.strftime("%d/%m/%Y - %I:%M:%S%p (%Z)"))
+
 filename = f"{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
@@ -250,9 +255,15 @@ if debug:
 
 #write logging data
 #file creation time in unix timestamp, exposure 0-255, lux, shutter speed in millionths of a second, iso, total time taken to shoot the photo, number of test exposures needed to get to a good exposure
-log_line = f"{filename_time}, {exposure}, {lux}, {int(shutter_speed)}, {iso}, {int(time.time())-start_time}, {trials}"
-f=open("calibrate_cam_data.csv", "a+")
-f.write(f"{log_line}\n")
+
+#add header to log file if log file doesn't exist
+if not path.exists("timelapse_log.csv"):
+    f=open("timelapse_log.csv", "a+")
+    f.write(f"Local Time, Unix Time, Exposure (0-255), Lux, Shutter Microseconds, ISO, Time Elapsed, Trials to Find Exposure\n")
+    f.close()
+
+f=open("timelapse_log.csv", "a+")
+f.write(f"{local_time}, {filename_time}, {exposure}, {lux}, {int(shutter_speed)}, {iso}, {int(time.time())-start_time}, {trials}\n")
 f.close()
 
 if debug:
@@ -275,7 +286,8 @@ if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
 if debug:
 	print (f"\ndebug add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
 
-if len(lux_exposure_dict.keys()) > 1: #run the dictonary pruning if there is more than one item in the dictonary
+#run the dictonary pruning only if there are several items in the dictonary
+if len(lux_exposure_dict.keys()) > 20: 
     #prune items from dictonary that fall outside reasonable bounds
     lux_exposure_dict_count = len(lux_exposure_dict.keys())
     log_lux_exposure = {}
@@ -284,6 +296,8 @@ if len(lux_exposure_dict.keys()) > 1: #run the dictonary pruning if there is mor
         lux = np.log10(key)
         exposure = np.log10(lux_exposure_dict[key])
         log_lux_exposure.update({lux : exposure})
+        
+    #make an array to feed to polyfit
     log_lux_exposure = list(log_lux_exposure.items())
     log_lux_exposure_array = np.array(log_lux_exposure)
 
@@ -291,9 +305,9 @@ if len(lux_exposure_dict.keys()) > 1: #run the dictonary pruning if there is mor
     m, b = np.polyfit(log_lux_exposure_array[ :, 0], log_lux_exposure_array[ :, 1], 1)
 
 
-    if True:#if debug:
+    if debug:
         f=open("pruned-lux-ss.txt", "a+")
-        f.write(f"{filename_time}---------------------\n")
+        f.write(f"{local_time}, {filename_time}---------------------\n")
         f.close()
 
     #evaluate each item in the dictonary
@@ -303,10 +317,13 @@ if len(lux_exposure_dict.keys()) > 1: #run the dictonary pruning if there is mor
         #see how closely the shutter speed that was actually used compares to the predicted shutter speed
         #remove nonsense items
         if abs(np.log10(lux_exposure_dict[lux]) - predicted) >=1:
-            if True:#debug:
+            if debug:
                 f=open("pruned-lux-ss.txt", "a+")
-                f.write(f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n")
+                pruned_item = f"{lux}, {lux_exposure_dict[lux]}, {pretty_shutter_speed(lux_exposure_dict[lux])}\n"
+                print(pruned_item)
+                f.write(pruned_item)
                 f.close()
+
             del lux_exposure_dict[lux]
     print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}")
 
