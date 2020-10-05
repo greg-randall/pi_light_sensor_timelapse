@@ -234,7 +234,7 @@ utc_time = datetime.fromtimestamp(filename_time, timezone.utc)
 local_time = utc_time.astimezone()
 local_time = str(local_time.strftime("%d/%m/%Y - %I:%M:%S%p (%Z)"))
 
-filename = f"{filename_time}.jpg"
+filename = f"hu_{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
 if debug:
