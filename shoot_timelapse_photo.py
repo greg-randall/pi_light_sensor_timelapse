@@ -12,6 +12,9 @@ from humanfriendly import format_timespan
 
 from datetime import datetime, timezone
 
+from ftplib import FTP
+from ftpconfig import * #credentials for ftp. done this way to keep them from getting added to git
+
 ###################################################################################
 #settings
 ###################################################################################
@@ -27,6 +30,8 @@ ideal_exposure=110
 #delta is how far from the ideal you're welling to go, ~5 is pretty reasonable, smaller
 #probably requires modifications to the code
 delta=5
+#prefix for the image names in case you have multiple cameras
+filename_prefix = "hu_"
 #####################################################################################
 
 def shoot_photo(ss, iso, w, h, shoot_raw, filename):
@@ -234,7 +239,7 @@ utc_time = datetime.fromtimestamp(filename_time, timezone.utc)
 local_time = utc_time.astimezone()
 local_time = str(local_time.strftime("%d/%m/%Y - %I:%M:%S%p (%Z)"))
 
-filename = f"hu_{filename_time}.jpg"
+filename = f"{filename_prefix}{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
 if debug:
@@ -333,6 +338,25 @@ with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a fi
 
 if debug:
 	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
+
+
+print("Uploading Images:")
+try: 
+    ftp = FTP(SERVER, USER, PASS, timeout=15)
+    ftp.set_debuglevel(3)
+    ftp.storbinary('STOR ' + filename, open(filename, 'rb')) #upload the file
+    ftp.storbinary('STOR ' + filename_dng, open(filename_dng, 'rb')) #upload the file
+    ftp.storbinary('STOR log_v3.txt', open('log_v3.txt', 'rb')) #upload the file
+    ftp.close()
+    ftp_worked=True
+except:
+    print (f"Could not access {SERVER}.") #if we can't get to the server then list that it failed
+    ftp_worked=False
+print('---------------------------------------------')
+if ftp_worked:
+    print(f"ftp worked, deleting local image copies {filename} & {filename_dng}")
+    os.system(f"rm {filename}")
+    os.system(f"rm {filename_dng}")
 
 
 print (f"\nEverything took {format_timespan(int(time.time()-start_time))}.")
