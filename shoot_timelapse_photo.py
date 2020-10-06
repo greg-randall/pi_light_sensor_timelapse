@@ -22,7 +22,7 @@ max_shutter_speed = 239 * 1000000 #200 seconds for the hq cam, but camera works 
 image_x = 4056 #hq cam max res
 image_y = 3040
 iso = 100 # starting iso
-isos = [200, 400, 800] #dropped 100 since that's the default, also dropped a few intermediate values.
+isos = [400, 800] #dropped 100 since that's the default, also dropped a few intermediate values.
                        #camera seems to respond to higher isos, but the images don't get brighter
                        #camera also seems to respond to isos lower than 100 but 100 is base iso
 #0-255 is the exposure range
@@ -32,6 +32,11 @@ ideal_exposure=110
 delta=5
 #prefix for the image names in case you have multiple cameras
 filename_prefix = "hu_"
+#exposure trials, how many guesses the software gets at getting a good exposure
+exposure_trials = 7
+#turn on or off debugging information
+debug = True
+
 #####################################################################################
 
 def shoot_photo(ss, iso, w, h, shoot_raw, filename):
@@ -124,7 +129,7 @@ def calculate_lux(full, ir, integration_time, gain):
 
 def pretty_shutter_speed(ss):
     if ss>1000000:
-        return str(int(ss/1000000))
+        return f"{round(ss/1000000,1)}s"
     else:
         shutter_speed_fractions = {0.000125 : "8000", 0.00015625 : "6400", 0.0002 : "5000", 0.00025 : "4000", 0.0003125 : "3200", 0.0004 : "2500", 0.0005 : "2000", 0.000625 : "1600", 0.0008 : "1250", 0.001 : "1000", 0.00125 : "800", 0.0015625 : "640", 0.002 : "500", 0.0025 : "400", 0.003125 : "320", 0.004 : "250", 0.005 : "200", 0.00625 : "160", 0.008 : "125", 0.01 : "100", 0.0125 : "80", 0.016666667 : "60", 0.02 : "50", 0.025 : "40", 0.033333333 : "30", 0.04 : "25", 0.05 : "20", 0.066666667 : "15", 0.076923077 : "13", 0.1 : "10", 0.125 : "8", 0.166666667 : "6", 0.2 : "5", 0.25 : "4", 0.333333333 : "3", 0.4 : "2.5", 0.5 : "2", 1.666666667 : "0.6", 3.333333333 : "0.3"}
         closest = min(shutter_speed_fractions, key=lambda x:abs(x-(ss/1000000)))
@@ -135,9 +140,6 @@ def pretty_shutter_speed(ss):
 ###########################################################
 
 
-debug = False
-
-
 start_time = int(time.time())
 print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
 
@@ -145,7 +147,7 @@ print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
 lux = get_lux()
 
 if debug:
-	print (f"\ndebug get lux Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug get lux Seconds Elapsed: {int(time.time())-start_time}\nlux: {lux}")
 
 if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
@@ -157,6 +159,10 @@ if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter sp
     #find the closest value in the lux dictonary
     closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
     shutter_speed = lux_exposure_dict[closest]
+
+    if debug:
+	    print (f"\ndebug closest lux value: {closest}\n shutter speed from dict: {lux_exposure_dict[closest]}")
+
     #if exposure from the dictonary is at the maximum the exposure below exposure loop won't run, so we want to reduce the exposure a bit
     if shutter_speed >= max_shutter_speed:
         shutter_speed -= 10
@@ -188,7 +194,7 @@ trials = 0 #count the number of trial exposures to limit how long this process t
 if debug:
 	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
 
-while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < max_shutter_speed and trials <= 7:
+while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < (max_shutter_speed-100) and trials <= exposure_trials:
 
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
@@ -196,8 +202,14 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
     else:
         shutter_speed = int(shutter_speed / adjustment) #longer shorter speed
 
-    if shutter_speed>max_shutter_speed: #make sure we don't go past the longest shutter speed
+    
+
+    if shutter_speed > max_shutter_speed: #make sure we don't go past the longest shutter speed
+        if debug:
+            print(f"debug: max shutter speed hit before:  {shutter_speed}\n")
         shutter_speed = max_shutter_speed
+        if debug:
+            print(f"debug: max shutter speed hit after:  {shutter_speed}\n")
 
     shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
     exposure = check_exposure('test.jpg')
@@ -206,7 +218,12 @@ while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and
     print(f"{pretty_shutter_speed(shutter_speed)}, \t\t{lux}, \t{exposure}, \t\t\t{round(adjustment, 3)}") #tell the user about the current trial shot
 
     if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
+        if debug:
+            print(f"debug: inside too bright: before {shutter_speed}\n")
         shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
+        if debug:
+            print(f"debug: inside too bright: after {shutter_speed}\n")
+            
 
     trials +=1
 
@@ -221,9 +238,8 @@ if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
         exposure = check_exposure('test.jpg')
         if exposure > (ideal_exposure-delta):
             break
-
-    if debug:
-	    print (f"\ndebug iso loop Seconds Elapsed: {int(time.time())-start_time}")
+        if debug:
+	        print (f"\ndebug iso loop Seconds Elapsed: {int(time.time())-start_time}")
 
     print(f'Pushed to {iso}')
 
@@ -339,24 +355,30 @@ with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a fi
 if debug:
 	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
 
-
-print("Uploading Images:")
+if debug:
+    print(f"\nFTP Credentials: {SERVER}, {USER}, {PASS}")
+    
+print("\nUploading Images:")
 try: 
     ftp = FTP(SERVER, USER, PASS, timeout=15)
-    ftp.set_debuglevel(3)
-    ftp.storbinary('STOR ' + filename, open(filename, 'rb')) #upload the file
-    ftp.storbinary('STOR ' + filename_dng, open(filename_dng, 'rb')) #upload the file
-    ftp.storbinary('STOR log_v3.txt', open('log_v3.txt', 'rb')) #upload the file
+    if debug:
+        ftp.set_debuglevel(3)
+    else:
+        ftp.set_debuglevel(0)
+        
+    ftp.storbinary(f"STOR {filename_time}.jpg", open(f"{filename_time}.jpg", 'rb')) #upload the file
+    ftp.storbinary(f"STOR {filename_time}.dng", open(f"{filename_time}.dng", 'rb')) #upload the file
+    ftp.storbinary('STOR timelapse_log.csv', open('timelapse_log.csv', 'rb')) #upload the file
     ftp.close()
     ftp_worked=True
 except:
-    print (f"Could not access {SERVER}.") #if we can't get to the server then list that it failed
+    print (f"Could not access {SERVER}.\nImages Not Uploaded") #if we can't get to the server then list that it failed
     ftp_worked=False
-print('---------------------------------------------')
+
 if ftp_worked:
-    print(f"ftp worked, deleting local image copies {filename} & {filename_dng}")
-    os.system(f"rm {filename}")
-    os.system(f"rm {filename_dng}")
+    print(f"Images Uplaoded")
+    #os.system(f"rm {filename}")
+    #os.system(f"rm {filename_dng}")
 
 
 print (f"\nEverything took {format_timespan(int(time.time()-start_time))}.")
