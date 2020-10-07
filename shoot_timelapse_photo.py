@@ -194,7 +194,7 @@ trials = 0 #count the number of trial exposures to limit how long this process t
 if debug:
 	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
 
-while exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) and shutter_speed < (max_shutter_speed-100) and trials <= exposure_trials:
+while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) ) and shutter_speed < (max_shutter_speed-100000) and trials <= exposure_trials:
 
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
@@ -268,7 +268,7 @@ if debug:
 	print (f"\ndebug extract raws Seconds Elapsed: {int(time.time())-start_time}")
 
 #remove raw from jpg and compress the jpeg a bit
-os.system(f"convert {filename} -sampling-factor 4:2:0 -strip -quality 85 {filename}")
+os.system(f"convert {filename} -sampling-factor 4:2:0 -quality 85 {filename}")
 
 if debug:
 	print (f"\ndebug compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
