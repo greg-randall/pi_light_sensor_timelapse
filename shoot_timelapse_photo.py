@@ -174,7 +174,7 @@ if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter sp
         shutter_speed = lux_exposure_dict[closest]
 
         if debug:
-            print (f"\ndebug: closest lux value: {closest}\n shutter speed from dict: {lux_exposure_dict[closest]}")
+            print (f"\ndebug: from dict - closest lux value: {closest} closest shutter speed: {lux_exposure_dict[closest]}")
 
         #if exposure from the dictonary is at the maximum the exposure below exposure loop won't run, so we want to reduce the exposure a bit
         if shutter_speed >= (max_shutter_speed-100000):
@@ -216,7 +216,8 @@ if debug:
     print (f"while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) ) and shutter_speed < (max_shutter_speed-100000) and trials <= exposure_trials:")
     print (f"\ndebug: while ( {exposure} < {(ideal_exposure-delta)} or {exposure} > {(ideal_exposure+delta)} ) and {shutter_speed} < {(max_shutter_speed-100000)} and {trials} <= {exposure_trials}:\n")
 while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) ) and shutter_speed < (max_shutter_speed-100000) and trials <= exposure_trials:
-
+    if debug:
+        print (f"\ndebug: inside loop - while ( {exposure} < {(ideal_exposure-delta)} or {exposure} > {(ideal_exposure+delta)} ) and {shutter_speed} < {(max_shutter_speed-100000)} and {trials} <= {exposure_trials}:\n")
     #adjust the shutter speed up or down using the adjustment factor number
     if exposure < ideal_exposure:
         shutter_speed = int(shutter_speed * adjustment) #longer shutter speed
