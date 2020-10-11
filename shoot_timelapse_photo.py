@@ -49,6 +49,16 @@ def shoot_photo(ss, iso, w, h, shoot_raw, filename):
     else:
         exposure = '-ex off'
     command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+
+    if debug:
+        utc_time = datetime.fromtimestamp(int(time.time()), timezone.utc)
+        local_time = utc_time.astimezone()
+        local_time = str(local_time.strftime("%m/%d/%Y - %I:%M:%S%p (%Z)"))
+
+        f=open("raspistill-command-log.txt", "a+")
+        f.write(f"{local_time} - {command}\n")
+        f.close()
+
     os.system(command)
 
 
@@ -147,42 +157,52 @@ print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
 lux = get_lux()
 
 if debug:
-	print (f"\ndebug get lux Seconds Elapsed: {int(time.time())-start_time}\nlux: {lux}")
+	print (f"\ndebug: get lux Seconds Elapsed: {int(time.time())-start_time}\nlux: {lux}")
+
+dictonary_lookup_sucessful = False
 
 if path.exists("lux-exposure-dict"): #if there's a dictonary of lux - shutter speed, use the closest value in the dictonary as a starting point for exposure
     with open('lux-exposure-dict', 'rb') as handle:
         lux_exposure_dict = pickle.loads(handle.read())
 
+    if len(lux_exposure_dict) >=1:
+        if debug:
+            print (f"\ndebug: dict read Seconds Elapsed: {int(time.time())-start_time}")
+
+        #find the closest value in the lux dictonary
+        closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
+        shutter_speed = lux_exposure_dict[closest]
+
+        if debug:
+            print (f"\ndebug: closest lux value: {closest}\n shutter speed from dict: {lux_exposure_dict[closest]}")
+
+        #if exposure from the dictonary is at the maximum the exposure below exposure loop won't run, so we want to reduce the exposure a bit
+        if shutter_speed >= (max_shutter_speed-100000):
+            shutter_speed = shutter_speed - 200000
+
+        #shoot test photo with the shutter speed from the dictonary
+        shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
+        exposure = check_exposure('test.jpg')
+
+        if debug:
+            print (f"\ndebug: dict test shot Seconds Elapsed: {int(time.time())-start_time}")
+            print (f"\ndebug: dictonary lookup worked")
+        
+        dictonary_lookup_sucessful = True
+        
+
+if not dictonary_lookup_sucessful:
+#if the dictonary lookup didnt work (dict didn't exist or no items) shoot a photo on auto for the starting point
     if debug:
-	    print (f"\ndebug dict read Seconds Elapsed: {int(time.time())-start_time}")
+        print("\ndebug: Dictonary didn't work for some reason, shooting a photo full auto for a starting point.")
 
-    #find the closest value in the lux dictonary
-    closest = min(lux_exposure_dict, key=lambda x:abs(x-lux))
-    shutter_speed = lux_exposure_dict[closest]
-
-    if debug:
-	    print (f"\ndebug closest lux value: {closest}\n shutter speed from dict: {lux_exposure_dict[closest]}")
-
-    #if exposure from the dictonary is at the maximum the exposure below exposure loop won't run, so we want to reduce the exposure a bit
-    if shutter_speed >= max_shutter_speed:
-        shutter_speed -= 10
-
-    #shoot test photo with the shutter speed from the dictonary
-    shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
-    exposure = check_exposure('test.jpg')
-
-    if debug:
-	    print (f"\ndebug dict test shot Seconds Elapsed: {int(time.time())-start_time}")
-
-else: #if there isn't a dictonary, shoot a photo on auto for the starting point
-    print("No exposure dictonary found, shooting a photo full auto for a starting point.")
     shoot_photo_auto(image_x, image_y, True, 'test.jpg')
 
     shutter_speed = get_exif_shutter_speed('test.jpg')
     exposure = check_exposure('test.jpg')
 
     if debug:
-	    print (f"\ndebug auto exposure Seconds Elapsed: {int(time.time())-start_time}")
+	    print (f"\ndebug: auto exposure Seconds Elapsed: {int(time.time())-start_time}")
 
 print(f"{pretty_shutter_speed(shutter_speed)}, \t\t{lux}, \t{exposure}, \t\t\t0")
 
@@ -192,8 +212,9 @@ adjustment = ajustment_factor(exposure)
 trials = 0 #count the number of trial exposures to limit how long this process takes
 
 if debug:
-	print (f"\ndebug starting loop Seconds Elapsed: {int(time.time())-start_time}")
-
+    print (f"\ndebug: starting loop Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) ) and shutter_speed < (max_shutter_speed-100000) and trials <= exposure_trials:")
+    print (f"\ndebug: while ( {exposure} < {(ideal_exposure-delta)} or {exposure} > {(ideal_exposure+delta)} ) and {shutter_speed} < {(max_shutter_speed-100000)} and {trials} <= {exposure_trials}:\n")
 while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) ) and shutter_speed < (max_shutter_speed-100000) and trials <= exposure_trials:
 
     #adjust the shutter speed up or down using the adjustment factor number
@@ -220,7 +241,7 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
     if exposure > (ideal_exposure+delta) and shutter_speed >= (max_shutter_speed): #if the shot image is too bright, and the max shutter speed is exceeded then the loop would have finished finishes,
         if debug:
             print(f"debug: inside too bright: before {shutter_speed}\n")
-        shutter_speed = max_shutter_speed - 10                                     #this makes sure that the loop continues if the image is too bright
+        shutter_speed = max_shutter_speed - 200000                                     #this makes sure that the loop continues if the image is too bright
         if debug:
             print(f"debug: inside too bright: after {shutter_speed}\n")
             
@@ -228,7 +249,7 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
     trials +=1
 
     if debug:
-	    print (f"\ndebug inside loop Seconds Elapsed: {int(time.time())-start_time}")
+	    print (f"\ndebug: inside loop Seconds Elapsed: {int(time.time())-start_time}")
 
 #if we hit the max shutter speed, and it's still too dark we'll try pushing the iso:
 if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
@@ -239,39 +260,43 @@ if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
         if exposure > (ideal_exposure-delta):
             break
         if debug:
-	        print (f"\ndebug iso loop Seconds Elapsed: {int(time.time())-start_time}")
+	        print (f"\ndebug: iso loop Seconds Elapsed: {int(time.time())-start_time}")
 
     print(f'Pushed to {iso}')
 
-lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
+
+#new_lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
+#if lux/new_lux
+
+lux=get_lux()
 
 if debug:
-	print (f"\ndebug get lux again Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: get lux again Seconds Elapsed: {int(time.time())-start_time}")
 
 #rename test shot as the final shot
 filename_time = int(time.time())
 
 utc_time = datetime.fromtimestamp(filename_time, timezone.utc)
 local_time = utc_time.astimezone()
-local_time = str(local_time.strftime("%d/%m/%Y - %I:%M:%S%p (%Z)"))
+local_time = str(local_time.strftime("%m/%d/%Y - %I:%M:%S%p (%Z)"))
 
 filename = f"{filename_prefix}{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
 if debug:
-	print (f"\ndebug rename files Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: rename files Seconds Elapsed: {int(time.time())-start_time}")
 
 #extract raw file from jpg
 os.system(f"python3 PyDNG/examples/utility.py {filename}")
 
 if debug:
-	print (f"\ndebug extract raws Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: extract raws Seconds Elapsed: {int(time.time())-start_time}")
 
 #remove raw from jpg and compress the jpeg a bit
 os.system(f"convert {filename} -sampling-factor 4:2:0 -quality 85 {filename}")
 
 if debug:
-	print (f"\ndebug compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
 
 #write logging data
@@ -284,28 +309,33 @@ if not path.exists("timelapse_log.csv"):
     f.close()
 
 f=open("timelapse_log.csv", "a+")
-f.write(f"{local_time}, {filename_time}, {exposure}, {lux}, {int(shutter_speed)}, {iso}, {int(time.time())-start_time}, {trials}\n")
+f.write(f"{local_time}, {filename_time}, {exposure}, {lux}, {int(shutter_speed)}, {iso}, {format_timespan(int(time.time()-start_time))}, {trials}\n")
 f.close()
 
 if debug:
-	print (f"\ndebug write out log Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: write out log Seconds Elapsed: {int(time.time())-start_time}")
 
+#this idea didn't seem to pan out. kept the dict too small
 #if the exposure from the library took too many tries delete it:
-if trials >=3 and path.exists("lux-exposure-dict"):
-    del lux_exposure_dict[closest]
+#if trials >=3 and path.exists("lux-exposure-dict"):
+#    del lux_exposure_dict[closest]
 
 
 #make sure we got a good exposure before we save it to the table
-if exposure > (ideal_exposure-delta) and exposure < (ideal_exposure+delta):
+if exposure < (ideal_exposure-delta) and exposure > (ideal_exposure+delta):
     if path.exists("lux-exposure-dict"): #if the dictonary already exists we'll add a value to it
         lux_exposure_dict.update({lux : shutter_speed})
     else:
         lux_exposure_dict = {lux : shutter_speed} #if the dictonary doesn't exist we'll need to create a new dictonary
-
+    if debug:
+	    print (f"\ndebug: item added to dictonary -- {lux} : {shutter_speed}")
+else:
+    if debug:
+	    print (f"\ndebug: item not added to dictonary -- {lux} : {shutter_speed}")
 
 
 if debug:
-	print (f"\ndebug add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
 
 #run the dictonary pruning only if there are several items in the dictonary
 if len(lux_exposure_dict.keys()) > 20: 
@@ -353,7 +383,7 @@ with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a fi
 
 
 if debug:
-	print (f"\ndebug dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
+	print (f"\ndebug: dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
 
 if debug:
     print(f"\nFTP Credentials: {SERVER}, {USER}, {PASS}")
