@@ -37,6 +37,8 @@ exposure_trials = 7
 #turn on or off debugging information
 debug = True
 
+lens_focal_length = 6
+
 #####################################################################################
 
 def shoot_photo(ss, iso, w, h, shoot_raw, filename):
@@ -48,7 +50,7 @@ def shoot_photo(ss, iso, w, h, shoot_raw, filename):
         exposure = ''
     else:
         exposure = '-ex off'
-    command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
 
     if debug:
         utc_time = datetime.fromtimestamp(int(time.time()), timezone.utc)
@@ -68,7 +70,7 @@ def shoot_photo_auto(w, h, shoot_raw, filename):
         raw = '--raw '
     else:
         raw = ''
-    command = f"/home/pi/Desktop/userland/build/bin/raspistill {raw} -n -w {w} -h {h} -o {filename}"
+    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -n -w {w} -h {h} -o {filename}"
     os.system(command)
 
 def check_exposure(filename):
