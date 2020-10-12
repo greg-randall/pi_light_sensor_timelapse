@@ -324,8 +324,10 @@ if debug:
 #    del lux_exposure_dict[closest]
 
 
+if debug:
+    print(f"\ndebug: exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta)\ndebug: {exposure} >= ({ideal_exposure-delta}) and {exposure} <= ({ideal_exposure+delta})")
 #make sure we got a good exposure before we save it to the table
-if exposure < (ideal_exposure-delta) and exposure > (ideal_exposure+delta):
+if exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta):
     if path.exists("lux-exposure-dict"): #if the dictonary already exists we'll add a value to it
         lux_exposure_dict.update({lux : shutter_speed})
     else:
