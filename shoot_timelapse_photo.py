@@ -31,13 +31,13 @@ ideal_exposure=110
 #probably requires modifications to the code
 delta=5
 #prefix for the image names in case you have multiple cameras
-filename_prefix = "hu_"
+filename_prefix = "dev_cam"
 #exposure trials, how many guesses the software gets at getting a good exposure
 exposure_trials = 7
 #turn on or off debugging information
 debug = True
 
-lens_focal_length = 6
+lens_focal_length = 6 #mm
 
 #####################################################################################
 
@@ -401,8 +401,8 @@ try:
     else:
         ftp.set_debuglevel(0)
         
-    ftp.storbinary(f"STOR {filename_time}.jpg", open(f"{filename_time}.jpg", 'rb')) #upload the file
-    ftp.storbinary(f"STOR {filename_time}.dng", open(f"{filename_time}.dng", 'rb')) #upload the file
+    ftp.storbinary(f"STOR {filename_prefix}{filename_time}.jpg", open(f"{filename_prefix}{filename_time}.jpg", 'rb')) #upload the file
+    ftp.storbinary(f"STOR {filename_prefix}{filename_time}.dng", open(f"{filename_prefix}{filename_time}.dng", 'rb')) #upload the file
     ftp.storbinary('STOR timelapse_log.csv', open('timelapse_log.csv', 'rb')) #upload the file
     ftp.close()
     ftp_worked=True
