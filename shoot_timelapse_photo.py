@@ -1,6 +1,6 @@
 import time
-import os.path
 from os import path
+import os
 import re
 import exifread
 from python_tsl2591 import tsl2591
@@ -31,13 +31,19 @@ ideal_exposure=110
 #probably requires modifications to the code
 delta=5
 #prefix for the image names in case you have multiple cameras
-filename_prefix = "dev_cam"
+filename_prefix = "dev_cam_"
+#remote folder prefix
+remote_folder_prefix = "dev_cam_"
+
 #exposure trials, how many guesses the software gets at getting a good exposure
 exposure_trials = 7
 #turn on or off debugging information
-debug = True
+debug = False
 
+#lens focal lenght-- set so that you can use adobe dng profile corrections
 lens_focal_length = 6 #mm
+
+
 
 #####################################################################################
 
@@ -147,10 +153,24 @@ def pretty_shutter_speed(ss):
         closest = min(shutter_speed_fractions, key=lambda x:abs(x-(ss/1000000)))
         shutter_speed_fraction = shutter_speed_fractions[closest]
         return f"1/{shutter_speed_fraction}"
-      
 
-###########################################################
+def make_folder(folder_name,ftp_resource):
+    filelist = []
+    ftp_resource.retrlines('LIST', filelist.append)
+    found = False
+    for f in filelist: #look through file list to find if the folder is there
+        filename = f.split()[-1]
+        if filename == folder_name: #if we find the folder break the loop
+            found = True
+            break
 
+    if not found: #if we didn't find the folder create the folder and then go into that directory
+        ftp_resource.mkd(folder_name)
+
+
+#######################################################################################################################################################################################
+#######################################################################################################################################################################################
+#######################################################################################################################################################################################
 
 start_time = int(time.time())
 print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
@@ -301,6 +321,12 @@ os.system(f"convert {filename} -sampling-factor 4:2:0 -quality 85 {filename}")
 if debug:
 	print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
+#create jpg thumbnail
+os.system(f"convert {filename} -resize 1500x1000 -sampling-factor 4:2:0 -quality 75 {filename_prefix}thumb_{filename_time}.jpg")
+
+if debug:
+	print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
+
 
 #write logging data
 #file creation time in unix timestamp, exposure 0-255, lux, shutter speed in millionths of a second, iso, total time taken to shoot the photo, number of test exposures needed to get to a good exposure
@@ -381,7 +407,7 @@ if len(lux_exposure_dict.keys()) > 20:
                 f.close()
 
             del lux_exposure_dict[lux]
-    print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}")
+    print( f"\nDictonary Items Pruned: {lux_exposure_dict_count-len(lux_exposure_dict.keys())}" )
 
 with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a file
     pickle.dump(lux_exposure_dict, handle)
@@ -394,26 +420,59 @@ if debug:
     print(f"\nFTP Credentials: {SERVER}, {USER}, {PASS}")
     
 print("\nUploading Images:")
+
 try: 
     ftp = FTP(SERVER, USER, PASS, timeout=15)
     if debug:
         ftp.set_debuglevel(3)
     else:
         ftp.set_debuglevel(0)
-        
-    ftp.storbinary(f"STOR {filename_prefix}{filename_time}.jpg", open(f"{filename_prefix}{filename_time}.jpg", 'rb')) #upload the file
-    ftp.storbinary(f"STOR {filename_prefix}{filename_time}.dng", open(f"{filename_prefix}{filename_time}.dng", 'rb')) #upload the file
-    ftp.storbinary('STOR timelapse_log.csv', open('timelapse_log.csv', 'rb')) #upload the file
-    ftp.close()
     ftp_worked=True
 except:
     print (f"Could not access {SERVER}.\nImages Not Uploaded") #if we can't get to the server then list that it failed
     ftp_worked=False
 
 if ftp_worked:
-    print(f"Images Uplaoded")
-    #os.system(f"rm {filename}")
-    #os.system(f"rm {filename_dng}")
+    make_folder(f"{remote_folder_prefix}dng",ftp)
+    make_folder(f"{remote_folder_prefix}jpg",ftp)
+    make_folder(f"{remote_folder_prefix}thumb",ftp)
+            
+    if not os.path.exists('uploaded'):
+        os.makedirs('uploaded')
+
+    files_to_move = []
+    files = os.listdir()
+    for file in files: 
+        if debug:
+            print(f"debug: looking to see if {file} is sitable for ftp upload\n")
+
+        if re.search(rf"{filename_prefix}\d+\.jpg", file):
+            ftp.storbinary(f"STOR {remote_folder_prefix}jpg/{filename_prefix}{filename_time}.jpg", open(f"{filename_prefix}{filename_time}.jpg", 'rb'))
+            files_to_move.append(f"{filename_prefix}{filename_time}.jpg")
+            print(f"Uploaded: {file}")
+            time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+
+        if re.search(rf"{filename_prefix}\d+\.dng", file):
+            ftp.storbinary(f"STOR {remote_folder_prefix}dng/{filename_prefix}{filename_time}.dng", open(f"{filename_prefix}{filename_time}.dng", 'rb'))
+            files_to_move.append(f"{filename_prefix}{filename_time}.dng")
+            print(f"Uploaded: {file}")
+            time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+
+        if re.search(rf"{filename_prefix}thumb_\d+\.jpg", file):
+            ftp.storbinary(f"STOR {remote_folder_prefix}thumb/{filename_prefix}thumb_{filename_time}.jpg", open(f"{filename_prefix}thumb_{filename_time}.jpg", 'rb'))
+            files_to_move.append(f"{filename_prefix}thumb_{filename_time}.jpg")
+            print(f"Uploaded: {file}")
+            time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+
+    ftp.storbinary(f"STOR {filename_prefix}timelapse_log.csv", open('timelapse_log.csv', 'rb')) #upload the file
+    ftp.close()
+
+    for file in files_to_move:
+        os.system(f"mv {file} uploaded/{file}")
+        if debug:
+            print(f"debug: moved {file} to uploaded folder")
+
+
 
 
 print (f"\nEverything took {format_timespan(int(time.time()-start_time))}.")
