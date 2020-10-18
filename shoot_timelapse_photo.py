@@ -13,36 +13,7 @@ from humanfriendly import format_timespan
 from datetime import datetime, timezone
 
 from ftplib import FTP
-from ftpconfig import * #credentials for ftp. done this way to keep them from getting added to git
-
-###################################################################################
-#settings
-###################################################################################
-max_shutter_speed = 239 * 1000000 #200 seconds for the hq cam, but camera works in millionths of a second
-image_x = 4056 #hq cam max res
-image_y = 3040
-iso = 100 # starting iso
-isos = [400, 800] #dropped 100 since that's the default, also dropped a few intermediate values.
-                       #camera seems to respond to higher isos, but the images don't get brighter
-                       #camera also seems to respond to isos lower than 100 but 100 is base iso
-#0-255 is the exposure range
-ideal_exposure=110
-#delta is how far from the ideal you're welling to go, ~5 is pretty reasonable, smaller
-#probably requires modifications to the code
-delta=5
-#prefix for the image names in case you have multiple cameras
-filename_prefix = "hu_"
-#remote folder prefix
-remote_folder_prefix = "main_cam_"
-
-#exposure trials, how many guesses the software gets at getting a good exposure
-exposure_trials = 7
-#turn on or off debugging information
-debug = False
-
-#lens focal lenght-- set so that you can use adobe dng profile corrections
-lens_focal_length = 6 #mm
-
+from config import * #settings for timelapse plus credentials for ftp. done this way to keep them from getting added to git
 
 
 #####################################################################################
@@ -274,18 +245,21 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
     if debug:
 	    print (f"\ndebug: inside loop Seconds Elapsed: {int(time.time())-start_time}")
 
-#if we hit the max shutter speed, and it's still too dark we'll try pushing the iso:
-if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
-    print('Maximum Shutter Speed Hit, Pushing ISO')
-    for iso in isos:
-        shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
-        exposure = check_exposure('test.jpg')
-        if exposure > (ideal_exposure-delta):
-            break
-        if debug:
-	        print (f"\ndebug: iso loop Seconds Elapsed: {int(time.time())-start_time}")
 
-    print(f'Pushed to {iso}')
+#since we're shooting raw the iso stuff seems to be not useful
+
+#if we hit the max shutter speed, and it's still too dark we'll try pushing the iso:
+#if shutter_speed >= max_shutter_speed and exposure < (ideal_exposure-delta):
+#    print('Maximum Shutter Speed Hit, Pushing ISO')
+#    for iso in isos:
+#        shoot_photo(shutter_speed, iso, image_x, image_y, True, 'test.jpg')
+#        exposure = check_exposure('test.jpg')
+#        if exposure > (ideal_exposure-delta):
+#            break
+#        if debug:
+#	        print (f"\ndebug: iso loop Seconds Elapsed: {int(time.time())-start_time}")
+#
+#    print(f'Pushed to {iso}')
 
 
 #new_lux=get_lux() #grab a fresh lux reading in case the outdoor lighting has changed
