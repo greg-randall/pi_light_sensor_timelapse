@@ -31,9 +31,9 @@ ideal_exposure=110
 #probably requires modifications to the code
 delta=5
 #prefix for the image names in case you have multiple cameras
-filename_prefix = "dev_cam_"
+filename_prefix = "hu_"
 #remote folder prefix
-remote_folder_prefix = "dev_cam_"
+remote_folder_prefix = "main_cam_"
 
 #exposure trials, how many guesses the software gets at getting a good exposure
 exposure_trials = 7
@@ -440,38 +440,34 @@ if ftp_worked:
     if not os.path.exists('uploaded'):
         os.makedirs('uploaded')
 
-    files_to_move = []
     files = os.listdir()
     for file in files: 
         if debug:
             print(f"debug: looking to see if {file} is sitable for ftp upload\n")
 
-        if re.search(rf"{filename_prefix}\d+\.jpg", file):
-            ftp.storbinary(f"STOR {remote_folder_prefix}jpg/{filename_prefix}{filename_time}.jpg", open(f"{filename_prefix}{filename_time}.jpg", 'rb'))
-            files_to_move.append(f"{filename_prefix}{filename_time}.jpg")
+        if re.search(rf"{filename_prefix}thumb_\d+\.jpg", file):# and path.exists(f"{filename_prefix}thumb_{filename_time}.jpg"):
+            ftp.storbinary(f"STOR {remote_folder_prefix}thumb/{file}", open(file, 'rb'))
+            os.system(f"mv {file} uploaded/{file}")
             print(f"Uploaded: {file}")
             time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
 
-        if re.search(rf"{filename_prefix}\d+\.dng", file):
-            ftp.storbinary(f"STOR {remote_folder_prefix}dng/{filename_prefix}{filename_time}.dng", open(f"{filename_prefix}{filename_time}.dng", 'rb'))
-            files_to_move.append(f"{filename_prefix}{filename_time}.dng")
+        elif re.search(rf"{filename_prefix}\d+\.jpg", file): #and path.exists(f"{filename_prefix}{filename_time}.jpg"):
+            ftp.storbinary(f"STOR {remote_folder_prefix}jpg/{file}", open(file, 'rb'))
+            os.system(f"mv {file} uploaded/{file}")
             print(f"Uploaded: {file}")
             time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+            
+        elif re.search(rf"{filename_prefix}\d+\.dng", file):# and path.exists(f"{filename_prefix}{filename_time}.dng"):
+            ftp.storbinary(f"STOR {remote_folder_prefix}dng/{file}", open(file, 'rb'))
+            os.system(f"mv {file} uploaded/{file}")
+            print(f"Uploaded: {file}")
+            time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+            
 
-        if re.search(rf"{filename_prefix}thumb_\d+\.jpg", file):
-            ftp.storbinary(f"STOR {remote_folder_prefix}thumb/{filename_prefix}thumb_{filename_time}.jpg", open(f"{filename_prefix}thumb_{filename_time}.jpg", 'rb'))
-            files_to_move.append(f"{filename_prefix}thumb_{filename_time}.jpg")
-            print(f"Uploaded: {file}")
-            time.sleep(2) #ftp going too fast sometimes, remote computer will stop transfers
+
 
     ftp.storbinary(f"STOR {filename_prefix}timelapse_log.csv", open('timelapse_log.csv', 'rb')) #upload the file
     ftp.close()
-
-    for file in files_to_move:
-        os.system(f"mv {file} uploaded/{file}")
-        if debug:
-            print(f"debug: moved {file} to uploaded folder")
-
 
 
 
