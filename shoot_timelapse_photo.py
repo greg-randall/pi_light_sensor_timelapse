@@ -23,11 +23,13 @@ def shoot_photo(ss, iso, w, h, shoot_raw, filename):
         raw = '--raw '
     else:
         raw = ''
-    if ss<1000000: #it seems like having auto exposure on for exposures longer than about a second takes FOREVER to shoot a photo. below a second doesn't seem to make a difference
-        exposure = ''
-    else:
-        exposure = '-ex off'
-    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+
+
+    #https://www.raspberrypi.org/forums/viewtopic.php?p=1663899&sid=245cedd7de22007b3577c44131609b7f#p1663899
+    #reveals how to shoot long exposures but not have it take all day
+    #old command: command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+
+    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -ag 1 -bm -st -md 3 -th none -n --raw -drc off -awb off -ex off -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
 
     if debug:
         utc_time = datetime.fromtimestamp(int(time.time()), timezone.utc)
