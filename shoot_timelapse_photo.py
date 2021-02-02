@@ -29,7 +29,7 @@ def shoot_photo(ss, iso, w, h, shoot_raw, filename):
     #reveals how to shoot long exposures but not have it take all day
     #old command: command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -md 3 {exposure} -n -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
 
-    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -ag 1 -bm -st -md 3 -th none -n --raw -drc off -awb off -ex off -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
+    command = f"/home/pi/Desktop/userland/build/bin/raspistill --exif EXIF.FocalLength={lens_focal_length}/1 {raw} -ag 1 -bm -st -md 3 -th none -n --raw -drc off -awb sun -ex off -ss {ss} -w {w} -h {h} -ISO {iso} -o {filename}"
 
     if debug:
         utc_time = datetime.fromtimestamp(int(time.time()), timezone.utc)
@@ -152,7 +152,7 @@ print(f"Shutter Speed, \tLux, \t\tExposure (0-255), \tAdjustment")
 lux = get_lux()
 
 if debug:
-	print (f"\ndebug: get lux Seconds Elapsed: {int(time.time())-start_time}\nlux: {lux}")
+    print (f"\ndebug: get lux Seconds Elapsed: {int(time.time())-start_time}\nlux: {lux}")
 
 dictonary_lookup_sucessful = False
 
@@ -197,7 +197,7 @@ if not dictonary_lookup_sucessful:
     exposure = check_exposure('test.jpg')
 
     if debug:
-	    print (f"\ndebug: auto exposure Seconds Elapsed: {int(time.time())-start_time}")
+        print (f"\ndebug: auto exposure Seconds Elapsed: {int(time.time())-start_time}")
 
 print(f"{pretty_shutter_speed(shutter_speed)}, \t\t{lux}, \t{exposure}, \t\t\t0")
 
@@ -245,7 +245,7 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
     trials +=1
 
     if debug:
-	    print (f"\ndebug: inside loop Seconds Elapsed: {int(time.time())-start_time}")
+        print (f"\ndebug: inside loop Seconds Elapsed: {int(time.time())-start_time}")
 
 
 #since we're shooting raw the iso stuff seems to be not useful
@@ -259,7 +259,7 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
 #        if exposure > (ideal_exposure-delta):
 #            break
 #        if debug:
-#	        print (f"\ndebug: iso loop Seconds Elapsed: {int(time.time())-start_time}")
+#           print (f"\ndebug: iso loop Seconds Elapsed: {int(time.time())-start_time}")
 #
 #    print(f'Pushed to {iso}')
 
@@ -270,7 +270,7 @@ while ( exposure < (ideal_exposure-delta) or exposure > (ideal_exposure+delta) )
 lux=get_lux()
 
 if debug:
-	print (f"\ndebug: get lux again Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: get lux again Seconds Elapsed: {int(time.time())-start_time}")
 
 #rename test shot as the final shot
 filename_time = int(time.time())
@@ -283,25 +283,25 @@ filename = f"{filename_prefix}{filename_time}.jpg"
 os.system(f"mv test.jpg {filename}")
 
 if debug:
-	print (f"\ndebug: rename files Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: rename files Seconds Elapsed: {int(time.time())-start_time}")
 
 #extract raw file from jpg
 os.system(f"python3 PyDNG/examples/utility.py {filename}")
 
 if debug:
-	print (f"\ndebug: extract raws Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: extract raws Seconds Elapsed: {int(time.time())-start_time}")
 
 #remove raw from jpg and compress the jpeg a bit
 os.system(f"convert {filename} -sampling-factor 4:2:0 -quality 85 {filename}")
 
 if debug:
-	print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
 #create jpg thumbnail
 os.system(f"convert {filename} -resize 1500x1000 -sampling-factor 4:2:0 -quality 75 {filename_prefix}thumb_{filename_time}.jpg")
 
 if debug:
-	print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: compress jpg strip raw Seconds Elapsed: {int(time.time())-start_time}")
 
 
 #write logging data
@@ -318,7 +318,7 @@ f.write(f"{local_time}, {filename_time}, {exposure}, {lux}, {int(shutter_speed)}
 f.close()
 
 if debug:
-	print (f"\ndebug: write out log Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: write out log Seconds Elapsed: {int(time.time())-start_time}")
 
 #this idea didn't seem to pan out. kept the dict too small
 #if the exposure from the library took too many tries delete it:
@@ -327,7 +327,7 @@ if debug:
 
 
 if debug:
-    print(f"\ndebug: exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta)\ndebug: {exposure} >= ({ideal_exposure-delta}) and {exposure} <= ({ideal_exposure+delta})")
+    print(f"\ndebug: final: exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta)\ndebug: {exposure} >= ({ideal_exposure-delta}) and {exposure} <= ({ideal_exposure+delta})")
 #make sure we got a good exposure before we save it to the table
 if exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta):
     if path.exists("lux-exposure-dict"): #if the dictonary already exists we'll add a value to it
@@ -335,14 +335,14 @@ if exposure >= (ideal_exposure-delta) and exposure <= (ideal_exposure+delta):
     else:
         lux_exposure_dict = {lux : shutter_speed} #if the dictonary doesn't exist we'll need to create a new dictonary
     if debug:
-	    print (f"\ndebug: item added to dictonary -- {lux} : {shutter_speed}")
+        print (f"\ndebug: item added to dictonary -- {lux} : {shutter_speed}")
 else:
     if debug:
-	    print (f"\ndebug: item not added to dictonary -- {lux} : {shutter_speed}")
+        print (f"\ndebug: item not added to dictonary -- {lux} : {shutter_speed}")
 
 
 if debug:
-	print (f"\ndebug: add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: add items to dict  Seconds Elapsed: {int(time.time())-start_time}")
 
 #run the dictonary pruning only if there are several items in the dictonary
 if len(lux_exposure_dict.keys()) > 20: 
@@ -390,7 +390,7 @@ with open('lux-exposure-dict', 'wb') as handle: #write out the dictonary to a fi
 
 
 if debug:
-	print (f"\ndebug: dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
+    print (f"\ndebug: dictonary pruned Seconds Elapsed: {int(time.time())-start_time}")
 
 if debug:
     print(f"\nFTP Credentials: {SERVER}, {USER}, {PASS}")
