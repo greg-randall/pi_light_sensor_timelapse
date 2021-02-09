@@ -8,6 +8,8 @@ The software needs to calculate exposures for the photos, shoot the photos, and 
 
 The Raspberry Pi auto exposure doesn't work in low light, so I've included a light sensor to speed up finding the correct exposure.
 
+![v3 raspberry pi timelapse camera system](http://gregr.org/wp-content/uploads/2021/02/tl-v3.jpg)
+
 ## Parts List
 |Item|Cost|Supplier
 |---|---|---|
